@@ -6,6 +6,7 @@ import string
 import time
 import uuid
 import pbkdf2
+from typing import Dict
 
 
 class Obfuscatory(object):
@@ -19,7 +20,7 @@ class Obfuscatory(object):
     _keytab_file_name_: str
     _default_length_: int
     _digest_mod_: str
-    _hash_dict_ = {}
+    _hash_dict_: Dict[str, str] = {}
 
     # Public methods are designed for use while internal methods are not to be accessed directly
     def __init__(self, hash_algo_name: str = None):
@@ -35,7 +36,9 @@ class Obfuscatory(object):
             print('Using Hash algo sha3_512 default')
             self._digest_mod_ = 'sha3_512'
         else:
-            print('Hashing algo ' + hash_algo_name + ' is not supported. Switching to sha3_512 default')
+            print(
+                f'Hashing algo {hash_algo_name} is not supported. Switching to sha3_512 default'
+            )
             self._digest_mod_ = 'sha3_512'
         self._default_length_ = 64
 
@@ -48,15 +51,12 @@ class Obfuscatory(object):
             with open(self._keytab_file_name_, 'r') as dict_file:
                 for line in dict_file:
                     if line is not None and len(line) > 1:
-                        if "=" in line:
-                            (k, v) = line.strip().split('=')
-                            if k is not None and v is not None and len(k) > 0 and len(v) > 0:
-                                self._hash_dict_[k] = v
-                            else:
-                                raise SyntaxError("Malformed keytab file. Please check " + self._keytab_file_name_)
-                        else:
-                            raise SyntaxError("Either separator \'=\' is missing or encountered blank line in "
-                                              + self._keytab_file_name_)
+                        if "=" not in line:
+                            raise SyntaxError(f"Either separator '=' is missing or encountered blank line in {self._keytab_file_name_}")
+                        (k, v) = line.strip().split('=')
+                        if k is None or v is None or len(k) == 0 or len(v) == 0:
+                            raise SyntaxError(f"Malformed keytab file. Please check {self._keytab_file_name_}")
+                        self._hash_dict_[k] = v
 
         except Exception as e:
             exit(e.args[0])
@@ -95,13 +95,11 @@ class Obfuscatory(object):
             if key_name is None or message is None:
                 return None
             elif key_name not in self._hash_dict_.keys():
-                raise AttributeError('Unable to lookup ' + key_name + ' in ' + self._keytab_file_name_)
+                raise AttributeError(f'Unable to lookup {key_name} in {self._keytab_file_name_}')
             else:
-                key = str(self._hash_dict_[key_name])
-                if key is None or len(key) == 0:
-                    raise AttributeError('Unable to retrieve value of ' + key_name + ' from ' + self._keytab_file_name_)
-                else:
-                    return hmac.new(key.encode('utf-8'), message.encode('utf-8'), self._digest_mod_).hexdigest()
+                if not (key := str(self._hash_dict_[key_name])):
+                    raise AttributeError(f'Unable to retrieve value of {key_name} from {self._keytab_file_name_}')
+                return hmac.new(key.encode('utf-8'), message.encode('utf-8'), self._digest_mod_).hexdigest()
         except Exception as e:
             exit(e.args[0])
 
@@ -132,8 +130,6 @@ if __name__ == '__main__':
     obfuscate = Obfuscatory('sha512')
     print('Anonymize           : ' + obfuscate.anonymize("Hello World"))
     print('Pseudo (SHA512) Anon: ' + obfuscate.pseudo_anonymize("Hello World", 'key1'))
-    count: int = 5
-    while count > 0:
-        print('Pass'+str(6-count)+': Key Gen       : ' + obfuscate.generate_key(passphrase='Hello World'))
-        print('Pass'+str(6-count)+': KeyGen noargs : ' + obfuscate.generate_key())
-        count -= 1
+    for count in range(5, 0, -1):
+        print(f'Pass{6-count}: Key Gen       : {obfuscate.generate_key(passphrase="Hello World")}')
+        print(f'Pass{6-count}: KeyGen noargs : {obfuscate.generate_key()}')
